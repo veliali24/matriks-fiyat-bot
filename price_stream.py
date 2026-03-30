@@ -107,10 +107,27 @@ async def get_session(username: str, password: str) -> dict | None:
         
         page = await context.new_page()
         
+        msg_count = 0
+
         async def on_ws(ws):
+            nonlocal msg_count
             if "rtstream" in ws.url and "market" in ws.url:
                 result["ws_url"] = ws.url
-        
+                logger.info(f"WS yakalandı: {ws.url}")
+
+                async def on_frame(payload):
+                    nonlocal msg_count
+                    if isinstance(payload, bytes):
+                        decoded = decode_mx_message(payload)
+                        if decoded and decoded.get("last"):
+                            sym = decoded["symbol"]
+                            live_prices[sym] = {**decoded, "ts": int(time.time())}
+                            if msg_count % 50 == 0:
+                                logger.info(f"Fiyat güncellendi: {sym} = {decoded.get('last')}")
+                        msg_count += 1
+
+                ws.on("framereceived", lambda p: asyncio.ensure_future(on_frame(p)))
+
         page.on("websocket", on_ws)
         
         async def on_response(response):
@@ -174,57 +191,20 @@ async def get_session(username: str, password: str) -> dict | None:
             await browser.close()
             return None
         
-        # Cookies & local storage al
-        cookies = await context.cookies()
-        result["cookies"] = {c["name"]: c["value"] for c in cookies}
+        # Tarayıcıyı açık tut, WS intercept devam etsin
+        logger.info(f"Session alındı: {username} → {result['session_key'][:8] if result['session_key'] else '?'}...")
+        
+        # 25 dakika bekle (session süresi)
+        await page.wait_for_timeout(25 * 60 * 1000)
         
         await browser.close()
     
-    if result["session_key"] and result["ws_url"]:
-        logger.info(f"Session alındı: {username} → {result['session_key'][:8]}...")
-        return result
-    
-    return None
+    return result if result["session_key"] else None
 
 
 async def stream_prices(session_data: dict):
-    """WebSocket üzerinden fiyat verisi çeker."""
-    global live_prices, _last_update
-    
-    import websockets
-    
-    ws_url = session_data["ws_url"]
-    
-    # Cookie header
-    cookie_str = "; ".join(f"{k}={v}" for k, v in session_data.get("cookies", {}).items())
-    headers = {"Cookie": cookie_str} if cookie_str else {}
-    
-    try:
-        connect_kwargs = {}
-        if headers:
-            # websockets versiyonuna göre doğru parametre
-            try:
-                import websockets
-                ver = tuple(int(x) for x in websockets.__version__.split(".")[:2])
-                if ver >= (10, 0):
-                    connect_kwargs["additional_headers"] = headers
-                else:
-                    connect_kwargs["extra_headers"] = headers
-            except:
-                connect_kwargs["additional_headers"] = headers
-
-        async with websockets.connect(ws_url, **connect_kwargs) as ws:
-            logger.info(f"WS bağlantısı kuruldu: {ws_url}")
-            
-            async for message in ws:
-                if isinstance(message, bytes):
-                    result = decode_mx_message(message)
-                    if result and result.get("last"):
-                        sym = result["symbol"]
-                        live_prices[sym] = result
-                        _last_update = time.time()
-    except Exception as e:
-        logger.warning(f"WS bağlantısı kesildi: {e}")
+    """Artık kullanılmıyor — stream Playwright içinden intercept ediliyor."""
+    pass
 
 
 async def price_stream_loop():
