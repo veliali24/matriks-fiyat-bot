@@ -73,7 +73,10 @@ async def get_session(username: str, password: str) -> dict | None:
                         decoded = decode_mx_message(payload)
                         if decoded and decoded.get("last"):
                             sym = decoded["symbol"]
-                            live_prices[sym] = {**decoded, "ts": int(time.time())}
+                            # Mevcut veriyle merge et (eksik field'lar korunur)
+                            existing = live_prices.get(sym, {})
+                            merged = {**existing, **decoded, "ts": int(time.time())}
+                            live_prices[sym] = merged
                             logger.info(f"Fiyat: {sym} = {decoded.get('last')}")
                         elif len(payload) > 30 and msg_count < 200:
                             # Decode edilemeyen büyük mesajları raw kaydet
