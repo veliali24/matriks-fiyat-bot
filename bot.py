@@ -466,7 +466,7 @@ def main():
     app.add_handler(CommandHandler("fiyat", fiyat_command))
     app.add_handler(CommandHandler("liste", liste_command))
     app.add_handler(CommandHandler("ekle", ekle_command))
-    app.add_handler(CommandHandler(["cikar", "çıkar"], cikar_command))
+    app.add_handler(CommandHandler("cikar", cikar_command))
     app.add_handler(CommandHandler("alarm", alarm_command))
     app.add_handler(CommandHandler("alarmlar", alarmlar_command))
     app.add_handler(CommandHandler("hesap_ekle", hesap_ekle_command))
