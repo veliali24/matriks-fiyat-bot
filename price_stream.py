@@ -119,14 +119,49 @@ async def get_session(username: str, password: str) -> dict | None:
         page.on("response", on_response)
         
         try:
-            await page.goto(MATRIKS_URL, wait_until="load", timeout=40000)
-            await page.wait_for_timeout(4000)
-            await page.wait_for_selector('input[name="mxcustom1"]', timeout=20000)
-            await page.fill('input[name="mxcustom1"]', username)
-            await page.fill('input[name="mxcustom2"]', password)
-            await page.press('input[name="mxcustom2"]', 'Enter')
-            await page.wait_for_timeout(8000)
-            await page.wait_for_selector('text=ARAÇLAR', timeout=20000)
+            await page.goto(MATRIKS_URL, wait_until="load", timeout=60000)
+            await page.wait_for_timeout(6000)
+            # Debug: sayfa yüklendikten sonra screenshot al
+            await page.screenshot(path="debug_login.png")
+            logger.info("Debug screenshot kaydedildi: debug_login.png")
+            # Farklı selector'ları dene
+            selectors = [
+                'input[name="mxcustom1"]',
+                'input[type="text"]',
+                'input[placeholder*="ullanıcı"]',
+                'input[placeholder*="ser"]',
+                '#username',
+                '#mxcustom1',
+            ]
+            login_input = None
+            for sel in selectors:
+                try:
+                    await page.wait_for_selector(sel, timeout=5000)
+                    login_input = sel
+                    logger.info(f"Login input bulundu: {sel}")
+                    break
+                except:
+                    continue
+            if not login_input:
+                await page.screenshot(path="debug_no_input.png")
+                logger.error("Login input bulunamadı! debug_no_input.png'e bak.")
+                await browser.close()
+                return None
+            pass_selectors = ['input[name="mxcustom2"]', 'input[type="password"]', '#password', '#mxcustom2']
+            pass_input = 'input[name="mxcustom2"]'
+            for sel in pass_selectors:
+                try:
+                    await page.wait_for_selector(sel, timeout=3000)
+                    pass_input = sel
+                    break
+                except:
+                    continue
+            await page.fill(login_input, username)
+            await page.fill(pass_input, password)
+            await page.press(pass_input, 'Enter')
+            await page.wait_for_timeout(10000)
+            await page.screenshot(path="debug_after_login.png")
+            await page.wait_for_selector('text=ARAÇLAR', timeout=30000)
         except Exception as e:
             logger.error(f"Giriş hatası ({username}): {e}")
             await browser.close()
