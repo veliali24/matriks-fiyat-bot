@@ -35,12 +35,15 @@ from price_stream import get_price, get_all_prices, price_stream_loop
 
 load_dotenv()
 
+import pathlib
+pathlib.Path("logs").mkdir(exist_ok=True)
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("bot.log", encoding="utf-8"),
+        logging.FileHandler("logs/bot.log", encoding="utf-8"),
     ],
 )
 logger = logging.getLogger(__name__)
