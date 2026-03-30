@@ -62,7 +62,7 @@ async def get_session(username: str, password: str) -> dict | None:
 
         async def on_ws(ws):
             nonlocal msg_count
-            if "rtstream" in ws.url and "market" in ws.url:
+            if ("rtstream" in ws.url or "dlstream" in ws.url) and "market" in ws.url:
                 result["ws_url"] = ws.url
                 logger.info(f"WS yakalandı: {ws.url}")
 
