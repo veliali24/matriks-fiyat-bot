@@ -98,6 +98,11 @@ def decode_mx_message(raw: bytes) -> dict | None:
         if not vals.get("last"):
             return None
 
+        # Değişim yüzdesini hesapla (prev_close varsa)
+        if "prev" in vals and vals["prev"] and vals["prev"] != 0:
+            chg_pct = round((vals["last"] - vals["prev"]) / vals["prev"] * 100, 2)
+            vals["chg_pct"] = chg_pct
+
         return {
             "symbol": sym,
             "type": "derivative" if is_deriv else "stock",
