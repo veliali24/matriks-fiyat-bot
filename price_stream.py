@@ -77,13 +77,6 @@ async def get_session(username: str, password: str) -> dict | None:
                             existing = live_prices.get(sym, {})
                             merged = {**existing, **decoded, "ts": int(time.time())}
                             live_prices[sym] = merged
-                            logger.info(f"Fiyat: {sym} = {decoded.get('last')}")
-                        elif len(payload) > 30 and msg_count < 200:
-                            # Decode edilemeyen büyük mesajları raw kaydet
-                            import pathlib
-                            pathlib.Path("logs").mkdir(exist_ok=True)
-                            with open(f"logs/unknown_{msg_count}.bin", "wb") as f:
-                                f.write(payload)
                         msg_count += 1
 
                 ws.on("framereceived", lambda p: asyncio.ensure_future(on_frame(p)))

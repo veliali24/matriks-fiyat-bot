@@ -40,7 +40,7 @@ pathlib.Path("logs").mkdir(exist_ok=True)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
+    level=logging.WARNING,
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler("logs/bot.log", encoding="utf-8"),
