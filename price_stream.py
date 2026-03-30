@@ -149,9 +149,6 @@ async def get_session(username: str, password: str) -> dict | None:
         try:
             await page.goto(MATRIKS_URL, wait_until="load", timeout=40000)
             await page.wait_for_timeout(5000)
-            # Debug: sayfa yüklendikten sonra screenshot al
-            await page.screenshot(path="debug_login.png")
-            logger.info("Debug screenshot kaydedildi: debug_login.png")
             # Farklı selector'ları dene
             selectors = [
                 'input[name="mxcustom1"]',
@@ -188,7 +185,6 @@ async def get_session(username: str, password: str) -> dict | None:
             await page.fill(pass_input, password)
             await page.press(pass_input, 'Enter')
             await page.wait_for_timeout(10000)
-            await page.screenshot(path="debug_after_login.png")
             await page.wait_for_selector('text=ARAÇLAR', timeout=30000)
         except Exception as e:
             logger.error(f"Giriş hatası ({username}): {e}")
