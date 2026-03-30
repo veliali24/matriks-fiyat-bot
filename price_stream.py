@@ -69,16 +69,21 @@ async def get_session(username: str, password: str) -> dict | None:
                 async def on_frame(payload):
                     nonlocal msg_count
                     if isinstance(payload, bytes):
-                        # İlk 20 mesajı raw olarak kaydet (debug)
-                        if msg_count < 20:
-                            with open(f"raw_msg_{msg_count}.bin", "wb") as f:
-                                f.write(payload)
+                        # İlk 100 mesajda topic'i logla (debug)
+                        if msg_count < 100:
+                            try:
+                                text = payload.decode('latin-1')
+                                import re as _re
+                                topics = _re.findall(r'mx/[^\x00-\x1f]{3,40}', text)
+                                if topics:
+                                    logger.info(f"[frame {msg_count}] topics: {topics[:3]}")
+                            except:
+                                pass
                         decoded = decode_mx_message(payload)
                         if decoded and decoded.get("last"):
                             sym = decoded["symbol"]
                             live_prices[sym] = {**decoded, "ts": int(time.time())}
-                            if msg_count % 50 == 0:
-                                logger.info(f"Fiyat güncellendi: {sym} = {decoded.get('last')}")
+                            logger.info(f"Fiyat: {sym} = {decoded.get('last')}")
                         msg_count += 1
 
                 ws.on("framereceived", lambda p: asyncio.ensure_future(on_frame(p)))
