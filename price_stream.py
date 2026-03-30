@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 from account_manager import rotator, load_accounts, save_account
+from decode_proto import decode_mx_message
 
 load_dotenv()
 
@@ -28,56 +29,6 @@ live_prices: dict = {}
 _stream_running = False
 _last_update = 0
 
-
-def decode_mx_message(raw: bytes) -> dict | None:
-    """Binary Matriks mesajını decode eder."""
-    try:
-        if not raw or len(raw) < 5:
-            return None
-        
-        text = raw.decode('latin-1')
-        
-        # Sembol
-        m = re.search(r'mx/symbol/([A-Z0-9]+)@lvl2', text)
-        is_deriv = False
-        if not m:
-            m = re.search(r'mx/derivative/([A-Z0-9]+)', text)
-            is_deriv = True
-        if not m:
-            return None
-        
-        sym = m.group(1)
-        
-        # Protobuf field tag -> isim
-        field_map = {
-            0x29: 'last', 0x31: 'bid', 0x39: 'ask',
-            0x41: 'high', 0x49: 'low', 0x51: 'open',
-            0x59: 'prev', 0x61: 'chg', 0x69: 'chg_pct',
-            0x71: 'vol', 0x79: 'tvol',
-        }
-        
-        vals = {}
-        for i in range(len(raw) - 8):
-            tag = raw[i]
-            if tag in field_map and i + 9 <= len(raw):
-                try:
-                    v = struct.unpack_from('<d', raw, i + 1)[0]
-                    if 0.001 < abs(v) < 10_000_000 and v == v:
-                        vals[field_map[tag]] = round(v, 4)
-                except:
-                    pass
-        
-        if not vals:
-            return None
-        
-        return {
-            "symbol": sym,
-            "type": "derivative" if is_deriv else "stock",
-            "ts": int(time.time()),
-            **vals
-        }
-    except:
-        return None
 
 
 async def get_session(username: str, password: str) -> dict | None:
