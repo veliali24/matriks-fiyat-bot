@@ -3,3 +3,5 @@ playwright
 websockets
 cryptography
 python-dotenv
+fastapi
+uvicorn[standard]
