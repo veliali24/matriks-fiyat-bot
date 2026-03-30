@@ -45,9 +45,12 @@ def decode_mx_message(raw: bytes) -> dict | None:
         text = raw.decode('latin-1')
 
         # Sembol bul
-        m = re.search(r'mx/symbol/([A-Z0-9]+)@lvl2', text)
+        m = re.search(r'mx/symbol/([A-Z0-9]+)@(lvl\w+)', text)
         is_deriv = False
-        if not m:
+        lvl_suffix = None
+        if m:
+            lvl_suffix = m.group(2)
+        else:
             m = re.search(r'mx/derivative/([A-Z0-9]+)', text)
             is_deriv = True
         if not m:
@@ -55,8 +58,11 @@ def decode_mx_message(raw: bytes) -> dict | None:
 
         sym = m.group(1)
 
-        # Topic sonu: '@lvl2' + 5 byte
-        topic_end = text.find('@lvl2') + 5
+        # Topic sonu
+        if lvl_suffix:
+            topic_end = text.find(f'@{lvl_suffix}') + len(lvl_suffix) + 1
+        else:
+            topic_end = text.find(sym) + len(sym)
         binary = raw[topic_end:]
 
         # 0x29 (last price tag) anchor'ı bul
