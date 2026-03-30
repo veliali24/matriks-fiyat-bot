@@ -200,7 +200,20 @@ async def stream_prices(session_data: dict):
     headers = {"Cookie": cookie_str} if cookie_str else {}
     
     try:
-        async with websockets.connect(ws_url, extra_headers=headers) as ws:
+        connect_kwargs = {}
+        if headers:
+            # websockets versiyonuna göre doğru parametre
+            try:
+                import websockets
+                ver = tuple(int(x) for x in websockets.__version__.split(".")[:2])
+                if ver >= (10, 0):
+                    connect_kwargs["additional_headers"] = headers
+                else:
+                    connect_kwargs["extra_headers"] = headers
+            except:
+                connect_kwargs["additional_headers"] = headers
+
+        async with websockets.connect(ws_url, **connect_kwargs) as ws:
             logger.info(f"WS bağlantısı kuruldu: {ws_url}")
             
             async for message in ws:
