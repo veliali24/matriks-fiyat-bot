@@ -118,6 +118,10 @@ async def get_session(username: str, password: str) -> dict | None:
                 async def on_frame(payload):
                     nonlocal msg_count
                     if isinstance(payload, bytes):
+                        # İlk 20 mesajı raw olarak kaydet (debug)
+                        if msg_count < 20:
+                            with open(f"raw_msg_{msg_count}.bin", "wb") as f:
+                                f.write(payload)
                         decoded = decode_mx_message(payload)
                         if decoded and decoded.get("last"):
                             sym = decoded["symbol"]
