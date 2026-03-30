@@ -21,7 +21,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-MATRIKS_URL = "https://app.matrikswebtrader.com/tr"
+MATRIKS_URL = "https://app.matrikswebtrader.com/tr/main"
 
 # Canlı fiyat verileri
 live_prices: dict = {}
@@ -119,8 +119,8 @@ async def get_session(username: str, password: str) -> dict | None:
         page.on("response", on_response)
         
         try:
-            await page.goto(MATRIKS_URL, wait_until="networkidle", timeout=60000)
-            await page.wait_for_timeout(8000)
+            await page.goto(MATRIKS_URL, wait_until="load", timeout=40000)
+            await page.wait_for_timeout(5000)
             # Debug: sayfa yüklendikten sonra screenshot al
             await page.screenshot(path="debug_login.png")
             logger.info("Debug screenshot kaydedildi: debug_login.png")
