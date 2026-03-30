@@ -32,6 +32,7 @@ from telegram.ext import (
 
 from account_manager import save_account, delete_account, list_accounts
 from price_stream import get_price, get_all_prices, price_stream_loop
+import notifier
 
 load_dotenv()
 
@@ -454,9 +455,15 @@ async def alarm_check_loop(app: Application):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 async def post_init(app: Application):
+    # Notifier'ı başlat (admin bildirimleri için)
+    admin_ids = list(ALLOWED_USER_IDS)
+    notifier.init(app.bot, admin_ids)
+
     asyncio.create_task(price_stream_loop())
     asyncio.create_task(alarm_check_loop(app))
-    logger.info("Fiyat stream ve alarm kontrol başlatıldı.")
+
+    # Başlatma bildirimi
+    await notifier.notify_api_started(8000)
 
 
 def main():

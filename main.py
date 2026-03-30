@@ -25,12 +25,12 @@ logging.basicConfig(
 
 from price_stream import price_stream_loop
 from api import app as fastapi_app
+import notifier
 
 
 async def run_all():
     """Bot stream + FastAPI birlikte çalışır."""
 
-    # FastAPI ayrı thread'de başlat
     config = uvicorn.Config(
         fastapi_app,
         host="0.0.0.0",
