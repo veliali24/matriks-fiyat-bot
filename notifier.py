@@ -18,7 +18,7 @@ _admin_ids: list[int] = []
 
 # Son bildirim zamanları (spam önleme)
 _last_notif: dict[str, float] = {}
-NOTIF_COOLDOWN = 300  # Aynı hata 5 dakikada bir bildirilir
+NOTIF_COOLDOWN = 600  # Aynı hata 10 dakikada bir bildirilir
 
 
 def init(bot, admin_ids: list[int]):
@@ -105,7 +105,7 @@ async def notify_api_started(port: int):
     await notify(
         f"🚀 *Sistem başlatıldı*\nAPI: `http://localhost:{port}`\nStream: Bağlanıyor...",
         key="api_started",
-        force=True,
+        force=False,  # Cooldown uygula — restart spam'ını önle
     )
 
 
