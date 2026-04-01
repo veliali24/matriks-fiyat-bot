@@ -139,6 +139,25 @@ async def get_session(username: str, password: str) -> dict | None:
             await page.wait_for_timeout(10000)
             await page.wait_for_selector('text=ARAÇLAR', timeout=30000)
 
+            # Giriş başarılı — Fiyat tablosunu aç (tüm BIST sembolleri stream olsun)
+            try:
+                await page.click('text=ARAÇLAR')
+                await page.wait_for_timeout(500)
+                # Fiyat Tablosu veya Piyasa menüsünü ara
+                for menu_item in ['Fiyat Tablosu', 'Piyasa', 'Market', 'Hisse']:
+                    try:
+                        await page.click(f'text={menu_item}', timeout=3000)
+                        await page.wait_for_timeout(1000)
+                        logger.info(f"Menü açıldı: {menu_item}")
+                        break
+                    except:
+                        continue
+                # ESC ile popup'ları kapat
+                await page.keyboard.press('Escape')
+                await page.wait_for_timeout(500)
+            except Exception as e:
+                logger.warning(f"Fiyat tablosu açma hatası (devam ediliyor): {e}")
+
         except Exception as e:
             await notifier.notify_session_failed(username, str(e)[:200])
             await browser.close()
