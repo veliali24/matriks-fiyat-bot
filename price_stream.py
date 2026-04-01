@@ -78,12 +78,58 @@ async def get_investing_price(symbol: str) -> float | None:
     return None
 
 
+# Yahoo Finance referans fiyatları (başlangıç için)
+_yahoo_cache: dict = {}
+YAHOO_CACHE_TTL = 300  # 5 dakika
+
+async def get_yahoo_price(symbol: str) -> float | None:
+    """Yahoo Finance'ten referans fiyat çek."""
+    now = time.time()
+    cached = _yahoo_cache.get(symbol)
+    if cached and now - cached[1] < YAHOO_CACHE_TTL:
+        return cached[0]
+    
+    # Sembol dönüşüm
+    yahoo_map = {
+        "USDTRY": "USDTRY=X", "EURTRY": "EURTRY=X", "EURUSD": "EURUSD=X",
+        "XAUUSD": "GC=F", "GLDGR": "GC=F",
+        "THYAO": "THYAO.IS", "GARAN": "GARAN.IS", "AKBNK": "AKBNK.IS",
+        "ISCTR": "ISCTR.IS", "YKBNK": "YKBNK.IS", "TUPRS": "TUPRS.IS",
+        "TCELL": "TCELL.IS", "ARCLK": "ARCLK.IS", "BIMAS": "BIMAS.IS",
+    }
+    yahoo_sym = yahoo_map.get(symbol, symbol + ".IS")
+    
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}?interval=1m&range=1d"
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200:
+                data = r.json()
+                price = data.get("chart", {}).get("result", [{}])[0].get("meta", {}).get("regularMarketPrice")
+                if price and price > 0:
+                    _yahoo_cache[symbol] = (float(price), now)
+                    return float(price)
+    except Exception as e:
+        logger.debug(f"Yahoo fiyat alınamadı ({symbol}): {e}")
+    return None
+
+
 def sanity_check(symbol: str, new_price: float) -> bool:
     """Yeni fiyat önceki fiyatla %PRICE_SANITY_PCT'den fazla farklıysa reddet."""
     existing = live_prices.get(symbol, {})
     old_price = existing.get("last")
+    
     if not old_price or old_price <= 0:
-        return True  # İlk fiyat, kabul et
+        # İlk fiyat — Yahoo cache'i varsa karşılaştır
+        yahoo = _yahoo_cache.get(symbol)
+        if yahoo:
+            ref = yahoo[0]
+            diff = abs(new_price - ref) / ref
+            if diff > 0.20:  # Yahoo'dan %20'den fazla farklıysa reddet
+                logger.warning(f"İlk fiyat sanity (Yahoo): {symbol} yahoo={ref} matriks={new_price} (%{diff*100:.1f}) — reddedildi")
+                return False
+        return True  # Yahoo yok, kabul et
+    
     diff = abs(new_price - old_price) / old_price
     if diff > PRICE_SANITY_PCT:
         logger.warning(f"Sanity check FAILED: {symbol} {old_price} → {new_price} (%{diff*100:.1f} fark) — reddedildi")
@@ -249,6 +295,16 @@ async def price_stream_loop():
     """Ana stream döngüsü — session yönetimi."""
     global _stream_running
     _stream_running = True
+
+    # Başlangıçta Yahoo'dan referans fiyatları pre-load et
+    preload_symbols = ["USDTRY","EURTRY","EURUSD","XAUUSD","THYAO","GARAN","AKBNK","ISCTR","TUPRS","TCELL"]
+    for sym in preload_symbols:
+        try:
+            price = await get_yahoo_price(sym)
+            if price:
+                logger.info(f"Yahoo referans: {sym} = {price}")
+        except:
+            pass
 
     # Stale monitor başlat
     asyncio.ensure_future(stale_monitor())
