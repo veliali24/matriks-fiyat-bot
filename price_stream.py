@@ -11,6 +11,7 @@ import re
 import logging
 import os
 import time
+import httpx
 from pathlib import Path
 from dotenv import load_dotenv
 from account_manager import rotator, load_accounts, save_account
@@ -24,11 +25,70 @@ logger = logging.getLogger(__name__)
 MATRIKS_URL = "https://app.matrikswebtrader.com/tr/main"
 STALE_CHECK_INTERVAL = 120   # 2 dakikada bir stale kontrol
 STALE_THRESHOLD = 60         # 60 sn güncellenmemişse stale
+PRICE_SANITY_PCT = 0.10      # %10'dan fazla fark varsa reddet
 
 # Canlı fiyat verileri
 live_prices: dict = {}
 _stream_running = False
 _last_update = 0
+
+# ─── Investing.com fiyat kontrolü ────────────────────────────────────────────
+
+INVESTING_SYMBOLS = {
+    "USDTRY": "currencies/usd-try",
+    "EURTRY": "currencies/eur-try",
+    "EURUSD": "currencies/eur-usd",
+    "XAUUSD": "commodities/gold",
+    "THYAO":  "equities/turk-hava-yollari",
+    "GARAN":  "equities/garanti-bankasi",
+    "AKBNK":  "equities/akbank",
+}
+
+_investing_cache: dict = {}   # {symbol: (price, ts)}
+INVESTING_CACHE_TTL = 30      # 30 saniyede bir yenile
+
+async def get_investing_price(symbol: str) -> float | None:
+    """Investing.com'dan referans fiyat çek (cache'li)."""
+    now = time.time()
+    cached = _investing_cache.get(symbol)
+    if cached and now - cached[1] < INVESTING_CACHE_TTL:
+        return cached[0]
+
+    path = INVESTING_SYMBOLS.get(symbol)
+    if not path:
+        return None
+
+    try:
+        url = f"https://api.investing.com/api/financialdata/historical/{path}"
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"https://www.investing.com/{path}",
+                headers={"User-Agent": "Mozilla/5.0"},
+                follow_redirects=True,
+            )
+            # Sayfadaki son fiyatı bul
+            import re as _re
+            match = _re.search(r'"last":"?([\d.]+)"?', r.text)
+            if match:
+                price = float(match.group(1))
+                _investing_cache[symbol] = (price, now)
+                return price
+    except Exception as e:
+        logger.debug(f"Investing.com fiyat alınamadı ({symbol}): {e}")
+    return None
+
+
+def sanity_check(symbol: str, new_price: float) -> bool:
+    """Yeni fiyat önceki fiyatla %PRICE_SANITY_PCT'den fazla farklıysa reddet."""
+    existing = live_prices.get(symbol, {})
+    old_price = existing.get("last")
+    if not old_price or old_price <= 0:
+        return True  # İlk fiyat, kabul et
+    diff = abs(new_price - old_price) / old_price
+    if diff > PRICE_SANITY_PCT:
+        logger.warning(f"Sanity check FAILED: {symbol} {old_price} → {new_price} (%{diff*100:.1f} fark) — reddedildi")
+        return False
+    return True
 
 
 async def get_session(username: str, password: str) -> dict | None:
@@ -72,9 +132,12 @@ async def get_session(username: str, password: str) -> dict | None:
                         decoded = decode_mx_message(payload)
                         if decoded and decoded.get("last"):
                             sym = decoded["symbol"]
-                            existing = live_prices.get(sym, {})
-                            live_prices[sym] = {**existing, **decoded, "ts": int(time.time())}
-                            _last_update = time.time()
+                            new_price = decoded["last"]
+                            # Sanity check — %10'dan fazla fark varsa reddet
+                            if sanity_check(sym, new_price):
+                                existing = live_prices.get(sym, {})
+                                live_prices[sym] = {**existing, **decoded, "ts": int(time.time())}
+                                _last_update = time.time()
                         msg_count += 1
 
                 async def on_close(ws):
