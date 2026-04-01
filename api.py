@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from price_stream import get_price, get_all_prices, _last_update, _stream_running
+from yahoo_feed import get_yahoo_price_dict, get_all_yahoo_prices
 
 load_dotenv()
 
@@ -90,17 +91,29 @@ def health():
 
 @app.get("/api/fiyat/{symbol}")
 def get_single_price(symbol: str, _: str = Depends(verify_api_key)):
-    """Tek sembol fiyatı."""
+    """Tek sembol fiyatı — önce Yahoo'da bak, yoksa Matriks'te."""
     symbol = symbol.upper().strip()
+    
+    # Yahoo'da ara
+    yahoo_data = get_yahoo_price_dict(symbol)
+    if yahoo_data:
+        return {
+            **format_price(yahoo_data),
+            "source": "yahoo",
+        }
+    
+    # Matriks'te ara
     data = get_price(symbol)
-
     if not data:
         raise HTTPException(
             status_code=404,
             detail=f"{symbol} için fiyat verisi yok. Matriks'te bu sembol açık olmalı."
         )
 
-    return format_price(data)
+    return {
+        **format_price(data),
+        "source": "matriks",
+    }
 
 
 @app.get("/api/fiyatlar")
@@ -109,18 +122,28 @@ def get_prices(
     _: str = Depends(verify_api_key)
 ):
     """
-    Tüm veya seçili semboller.
+    Tüm veya seçili semboller (Yahoo + Matriks merge, Yahoo öncelikli).
     ?semboller=THYAO,GARAN,AKBNK
     """
-    all_prices = get_all_prices()
-
+    all_matriks = get_all_prices()
+    all_yahoo = get_all_yahoo_prices()
+    
+    # Yahoo'yu Matriks'in üstüne yapıştır (merge)
+    merged = dict(all_matriks)
+    for sym, data in all_yahoo.items():
+        merged[sym] = {**data, "source": "yahoo"}
+    
     if semboller:
         symbols = [s.strip().upper() for s in semboller.split(",") if s.strip()]
         result = {}
         missing = []
         for sym in symbols:
-            if sym in all_prices:
-                result[sym] = format_price(all_prices[sym])
+            if sym in merged:
+                data = merged[sym]
+                result[sym] = {
+                    **format_price(data),
+                    "source": data.get("source", "matriks"),
+                }
             else:
                 missing.append(sym)
         return {
@@ -130,6 +153,30 @@ def get_prices(
         }
 
     return {
-        "prices": {sym: format_price(data) for sym, data in all_prices.items()},
-        "count": len(all_prices),
+        "prices": {
+            sym: {
+                **format_price(data),
+                "source": data.get("source", "matriks"),
+            }
+            for sym, data in merged.items()
+        },
+        "count": len(merged),
+    }
+
+
+@app.get("/api/yahoo/{symbol}")
+def get_yahoo_only(symbol: str, _: str = Depends(verify_api_key)):
+    """Sadece Yahoo Finance verisi."""
+    symbol = symbol.upper().strip()
+    data = get_yahoo_price_dict(symbol)
+    
+    if not data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{symbol} Yahoo Finance'da bulunamadı."
+        )
+    
+    return {
+        **format_price(data),
+        "source": "yahoo",
     }

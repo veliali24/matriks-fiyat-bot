@@ -6,3 +6,4 @@ python-dotenv
 fastapi
 uvicorn[standard]
 httpx
+yfinance>=0.2.40

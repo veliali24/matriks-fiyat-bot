@@ -24,6 +24,7 @@ logging.basicConfig(
 )
 
 from price_stream import price_stream_loop
+from yahoo_feed import yahoo_price_loop
 from api import app as fastapi_app
 import notifier
 
@@ -41,6 +42,7 @@ async def run_all():
 
     await asyncio.gather(
         price_stream_loop(),
+        yahoo_price_loop(),
         server.serve(),
     )
 
