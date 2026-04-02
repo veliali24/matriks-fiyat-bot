@@ -16,7 +16,30 @@ from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from price_stream import get_price, get_all_prices, _last_update, _stream_running
+from price_stream import get_price as _matriks_get_price, get_all_prices as _matriks_get_all, _last_update, _stream_running
+try:
+    from yahoo_feed import get_all_yahoo_prices, get_yahoo_price_dict
+    _yahoo_available = True
+except ImportError:
+    _yahoo_available = False
+    def get_all_yahoo_prices(): return {}
+    def get_yahoo_price_dict(s): return None
+
+def get_price(symbol: str) -> dict | None:
+    """Yahoo öncelikli, Matriks fallback."""
+    if _yahoo_available:
+        y = get_yahoo_price_dict(symbol.upper())
+        if y:
+            return y
+    return _matriks_get_price(symbol)
+
+def get_all_prices() -> dict:
+    """Yahoo + Matriks merge (Yahoo öncelikli)."""
+    result = dict(_matriks_get_all())
+    if _yahoo_available:
+        for sym, data in get_all_yahoo_prices().items():
+            result[sym] = data
+    return result
 from yahoo_feed import get_yahoo_price_dict, get_all_yahoo_prices
 
 load_dotenv()
@@ -49,26 +72,30 @@ def verify_api_key(key: str = Security(api_key_header)):
 
 
 def format_price(data: dict) -> dict:
-    """Fiyat verisini API formatına çevirir."""
+    """Fiyat verisini API formatına çevirir. Yahoo ve Matriks formatlarını destekler."""
     now = time.time()
     ts = data.get("ts", 0)
     age = int(now - ts) if ts else None
     stale = age is not None and age > STALE_THRESHOLD
 
+    # Yahoo formatı: last doğrudan var
+    last = data.get("last") or data.get("price")
+
     return {
-        "symbol": data.get("symbol"),
-        "last": data.get("last"),
-        "bid": data.get("bid"),
-        "ask": data.get("ask"),
-        "high": data.get("high"),
-        "low": data.get("low"),
-        "open": data.get("open"),
-        "prev": data.get("prev"),
-        "vol": data.get("vol"),
-        "chg_pct": data.get("chg_pct"),
+        "symbol":     data.get("symbol"),
+        "last":       last,
+        "bid":        data.get("bid"),
+        "ask":        data.get("ask"),
+        "high":       data.get("high"),
+        "low":        data.get("low"),
+        "open":       data.get("open"),
+        "prev":       data.get("prev"),
+        "vol":        data.get("vol"),
+        "chg_pct":    data.get("chg_pct"),
+        "source":     data.get("source", "matriks"),
         "updated_at": ts,
         "age_seconds": age,
-        "stale": stale,
+        "stale":      stale,
     }
 
 
